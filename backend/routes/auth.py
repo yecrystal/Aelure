@@ -15,4 +15,27 @@ async def callback(request: Request):
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code not found.")
     user_data = await handle_google_callback(code)
-    return {"message": "Login successful", "user": user_data}
+    
+    # Create or get user
+    user = db.query(User).filter(User.google_id == user_data["sub"]).first()
+    if not user:
+        user = User(
+            google_id=user_data["sub"],
+            email=user_data["email"],
+            name=user_data["name"]
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    response = RedirectResponse(url="/user/me")
+    response.set_cookie("api_key", user.api_key, httponly=True)
+    return response
+
+@router.get("/logout")
+def logout(response: Response):
+    response = RedirectResponse(url="/")
+    response.delete_cookie("api_key")
+    return response
+
+
